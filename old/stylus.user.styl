@@ -1,0 +1,252 @@
+/* ==UserStyle==
+@name           Stylus Themeable
+@namespace      gluton.dev
+@version        1.0.0
+@description    Template
+@author         Gluton
+
+@preprocessor	stylus
+
+@var	color	themeColor			"Theme Color"		#00ed8b
+@var	color	backgroundColor		"Background Color"	#141414
+@var	color	textColor			"Text Color"		#e4e4e4
+
+==/UserStyle== */
+
+i = !important
+t = transparent
+bg = backgroundColor
+fg = textColor
+thm = themeColor
+
+root = unquote("^[0]")
+above($index = 1) {
+    s("^[-%s]", $index)
+}
+aboveRange($start = 1, $end = $start) {
+    s("^[-%s..-%s]", $start, $end)
+}
+insertBetweenAbove($selector, $index = 1, $start = $index, $end = $start) {
+    {selector-above($index)}{$selector}{selectors-above($start, $end)} {
+        {block}
+    }
+}
+
+invertify($color, $amount) {
+    $amount = unit($amount, '%')
+    if (dark($color)) {
+        return lighten($color, $amount)
+    } else {
+        return darken($color, $amount)
+    }
+}
+overlay($amount) {
+    $colorTowards = dark(bg) == ($amount >= 0) ? white : black
+    $amount = unit(abs($amount), '%')
+    return rgba($colorTowards)
+}
+
+colorize($value, $opacity = 1) {
+    $red = red($value) / 255
+    $green = green($value) / 255
+    $blue = blue($value) / 255
+    if (unit($opacity) == '%') {
+        $opacity = unit($opacity, '') / 100
+    }
+    $data = s("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><defs><filter id='colorize' color-interpolation-filters='sRGB'><feColorMatrix type='matrix' values='0 0 0 0 %s 0 0 0 0 %s 0 0 0 0 %s 0 0 0 %s 0' result='colorization'/><feComposite in='colorization' in2='SourceGraphic' operator='over' k1='0' k2='1' k3='1' k4='0'/></filter></defs></svg>#colorize", $red, $green, $blue, $opacity);
+    return grayscale(1) url($data)
+}
+colorizeWithLightMap($value) {
+    return grayscale(1) contrast(200%) invert(1) colorize($value, .75)
+}
+
+nullable($property, $args...) {
+    if (length($args) == 0) {
+        {$property}: none
+    } else if (typeof($args[0]) == 'rgba') {
+        {$property}-color: $args
+    } else {
+        {$property}: $args
+    }
+}
+
+sided($property, $side = null) {
+    if ($side == null) {
+        return $property
+    }
+    return ($property) + '-' + ($side)
+}
+
+fgc($amount = 0) {
+    if ($amount == null) {
+        return transparent
+    } else if ($amount == 0) {
+        return fg
+    } else {
+        inv(fg, $amount)
+    }
+}
+
+bgc($amount = 0) {
+    if ($amount == null) {
+        return t
+    } else if ($amount == 0) {
+        return bg
+    } else {
+        inv(bg, $amount)
+    }
+}
+
+bgp($value = 0, $args...) {
+    if (typeof($value) == 'rgba') { // if color, use color
+        nullable(background, $value, $args)
+    } else if (typeof($value) == 'unit') { // if not color, use as invertify amount for background color
+        nullable(background, bgc($value), $args)
+    } else {
+        nullable(background, $value, $args)
+    }
+}
+bgpi($value = 0) {
+    bgp($value, i)
+}
+
+bp($color, $side = null, $args...) {
+    nullable(sided(border, $side), $color, $args)
+}
+bpi($color, $side = null) {
+    bp($color, $side, i)
+}
+
+fgp($value = 0, $args...) {
+    if (typeof($value) == 'rgba') { // if color, use color
+        color: $value $args
+    } else if (typeof($value) == 'unit') { // if not color, use as invertify amount for foreground color
+        color: fgc($value) $args
+    } else {
+        color: $value $args
+    }
+}
+fgpi($color = 0) {
+    fgp($color, i)
+}
+
+c($color = thm) {
+    filter: colorize($color)
+}
+
+inv($color, $amount) {
+    return invertify($color, $amount)
+}
+ovr($color, $amount) {
+    return overlay($color, $amount)
+}
+
+@-moz-document url-prefix("chrome-extension://clngdbkpkpeebahjckkjfobafhncgmne") {
+    * {
+        transition: none i;
+    }
+
+    #header {
+        bgp();
+        fgp();
+
+        @media (max-width: 850px) {
+            &.sticky {
+                box-shadow: 0 0 3rem -0.75rem bg;
+            }
+        }
+
+        h1, h2 {
+            fgp(thm);
+        }
+
+        summary {
+            width: 100%;
+
+            &:hover {
+                bgp(10);
+
+                h2 {
+                    bp(t);
+                }
+            }
+        }
+    }
+
+    button {
+        bgp(10);
+        bp(null);
+        padding: 4px 8px;
+
+        &:not(:disabled) {
+            cursor: pointer;
+
+            &:hover {
+                bgpi(25);
+                fgpi()
+            }
+        }
+    }
+
+    input {
+        bpi(null);
+        bgpi(10);
+        border-radius: 0 i;
+
+        &:not(:disabled) {
+            &:hover {
+                bgi(25);
+            }
+
+            &[type="checkbox"] {
+                cursor: pointer;
+
+                &.slider {
+                    border-radius: 12px i;
+                }
+            }
+        }
+    }
+
+    label {
+        cursor: pointer;
+    }
+
+    select {
+        bpi(null);
+        bgpi(10);
+
+        &:not(:disabled) {
+            cursor: pointer;
+        }
+    }
+
+    .svg-icon {
+        > * {
+            fill: fg;
+
+            +insertBetweenAbove(':hover') {
+                fill: thm;
+            }
+        }
+    }
+
+    a {
+        fgp();
+
+        &:hover {
+            fgp(thm);
+
+            .svg-icon > * {
+                fill: thm i;
+            }
+        }
+    }
+
+    #lint tr,
+    #toc li {
+        &:hover {
+            bgp(10);
+        }
+    }
+}
