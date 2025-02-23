@@ -1,0 +1,1467 @@
+// implementation of https://github.com/material-foundation/material-color-utilitie
+
+// UTILS
+
+invoke0(fn) { return fn() }
+invoke1(fn, $a) { return fn($a) }
+invoke2(fn, $a, $b) { return fn($a, $b) }
+invoke3(fn, $a, $b, $c) { return fn($a, $b, $c) }
+invoke4(fn, $a, $b, $c, $d) { return fn($a, $b, $c, $d) }
+invoke5(fn, $a, $b, $c, $d, $e) { return fn($a, $b, $c, $d, $e) }
+invoke6(fn, $a, $b, $c, $d, $e, $f) { return fn($a, $b, $c, $d, $e, $f) }
+
+toString($value) { return join('', $value) }
+listToString($list) { return toString('[' join(', ', $list) ']') }
+nestedListToString($nestedList) {
+    $strings = ()
+    for $list in $nestedList {
+        push($strings, listToString($list))
+    }
+    return listToString($strings)
+}
+
+isNaN($value) { return toString($value) == 'NaN' }
+
+map($list, $fn) {
+    $newList = ()
+    for $e in $list {
+        push($newList, $fn($e))
+    }
+    return $newList
+}
+
+// LOGGING UTILS
+
+$logLevel = 3
+$logStack = ("")
+
+pushLogScope($scope) { push($logStack, $scope) }
+popLogScope() { pop($logStack) if length($logStack) > 1 }
+
+log($level, $value) {
+    if length($logStack) <= 1 {
+        p(toString($level " | " toString($value)))
+    } else {
+        p(toString($level " [" last($logStack) "] " toString($value)))
+    }
+}
+
+trace($value) { log("TRACE", $value) if $logLevel >= 5 }
+debug($value) { log("DEBUG", $value) if $logLevel >= 4 }
+info($value) { log("INFO", $value) if $logLevel >= 3 }
+warn($value) { log("WARN", $value) if $logLevel >= 2 }
+error($value) { log("TRACE", $value) if $logLevel >= 1 }
+
+// MATH UTILS
+
+PI = 3.141592653589323
+TAU = 6.283185307178646
+e = 2.718281828459045
+
+lerp($start, $stop, $amount) {
+    return (1 - $amount) * $start + $amount * $stop
+}
+
+exp($x) {
+    return e ** $x
+}
+
+clamp($min, $max, $x) {
+    return $min if $x < $min
+    return $max if $x > $max
+    return $x
+}
+
+sqrt($x) {
+    return $x ** (1 / 2)
+}
+
+cbrt($x) {
+    return $x ** (1 / 3)
+}
+
+ln($x) {
+    error("Undefined for values <= 0: " + $x) if $x <= 0
+
+    taylor($x) {
+        $precision = e ** -10
+        $result = 0
+        $term = $x
+
+        $j = 1
+        for $n in 1..200 {
+            $term = ($x ** $j) / $j
+            $result += $j % 2 == 1 ? $term : -($term)
+            $j += 1
+            return $result if abs($term) < $precision
+        }
+        return $result
+    }
+
+    $k = 0
+    $base = 2
+    $maxIterations = 1000
+    for $i in 0...$maxIterations {
+        if $x <= 2 {
+            $ln2 = taylor(1)
+            return $k * $ln2 + taylor($x - 1)
+        }
+        $x /= $base
+        $k += 1
+    }
+
+    error("Did not converge to <= 2: " + $x)
+}
+
+log1p($x) {
+    return ln(1 + $x)
+}
+
+sign($x) {
+    return -1 if $x < 0
+    return 1 if $x > 0
+    return 0
+}
+
+hypot($a, $b) {
+    return sqrt($a ** 2 + $b ** 2)
+}
+
+// Taylor series implementation
+arctan($x) {
+    taylorTerm($x, $n) {
+        return (-1 ** $n) * ($x ** (2 * $n + 1)) / (2 * $n + 1)
+    }
+
+    taylor($x) {
+        $greaterThanOne = $x > 1
+        $x = 1 / $x if $greaterThanOne
+
+        $precision = e ** -10
+        $result = 0
+
+        for $n in 0...200 {
+            $term = taylorTerm($x, $n)
+            return $greaterThanOne ? PI / 2 - $result : $result if abs($term) < $precision
+            $result += $term
+        }
+
+        return $greaterThanOne ? PI / 2 - $result : $result
+    }
+
+    return -(arctan(-($x))) if $x < 0
+
+    return 4 * taylor(1 / 5) - taylor(1 / 239) if $x == 1
+    return taylor($x)
+}
+
+atan2($y, $x) {
+    return arctan($y / $x) if $x > 0
+    return arctan($y / $x) + PI if ($x < 0) and ($y >= 0)
+    return arctan($y / $x) - PI if ($x < 0) and ($y < 0)
+    return PI / 2 if ($x == 0) and ($y > 0)
+    return -PI / 2 if ($x == 0) and ($y < 0)
+    return 0 if ($x == 0) and ($y == 0)
+    error("Undefined result for x: " + $x + " and y: " + $y)
+}
+
+radians2Degrees($radians) {
+    return $radians * 180 / PI
+}
+degrees2Radians($degrees) {
+    return $degrees / 180 * PI
+}
+
+// BITWISE OPERATIONS
+
+base2($value) {
+    $value = substr($value, 2, length($value)) if substr($value, 0, 2) == '0b'
+    $result = 0
+    for $i in 0...(length($value)) {
+        $base10Value = convert(substr($value, length($value) - $i - 1, 1))
+        error("Invalid hex symbol: " + $base10Value) unless $base10Value is a 'unit' and ($base10Value == 0 or $base10Value == 1)
+        $result += $base10Value * (2 ** $i)
+    }
+    return $result
+}
+
+base16($value) {
+    $hexLetterToBase10 = { A: 10, a: 10, B: 11, b: 11, C: 12, c: 12, D: 13, d: 13, E: 14, e: 14, F: 15, f: 15 }
+    $value = substr($value, 2, length($value)) if substr($value, 0, 2) == '0x'
+    $result = 0
+    for $i in 0...(length($value)) {
+        $base10Value = convert(substr($value, length($value) - $i - 1, 1))
+        error("Invalid hex symbol: " + $base10Value) unless $base10Value is a 'unit' or $base10Value in $hexLetterToBase10
+        $base10Value = $hexLetterToBase10[$base10Value] if $base10Value is a 'ident'
+        $result += $base10Value * (16 ** $i)
+    }
+    return $result
+}
+
+shl($value, $bits = 1) {
+    return $value * (2 ** $bits)
+}
+shr($value, $bits = 1) {
+    return floor($value / (2 ** $bits))
+}
+
+bitwise-and($a, $b) {
+    $result = 0
+    return $result if $a == 0 and $b == 0
+    for $i in 0...32 {
+        return $result if shl(1, $i) > $a and shl(1, $i) > $b
+        $ai = shr($a, $i) % 2
+        $bi = shr($b, $i) % 2
+        $result += shl($ai * $bi, $i)
+    }
+    return $result
+}
+bitwise-or($a, $b) {
+    $result = 0
+    return $result if $a == 0 and $b == 0
+    for $i in 0...32 {
+        return $result if shl(1, $i) > $a and shl(1, $i) > $b
+        $ai = shr($a, $i) % 2
+        $bi = shr($b, $i) % 2
+        $result += shl($ai + $bi - ($ai * $bi), $i)
+    }
+    return $result
+}
+
+// COLOR UTILS
+
+SRGB_TO_XYZ = \
+    (0.41233895 0.35762064 0.18051042) \
+    (0.2126 0.7152 0.0722) \
+    (0.01932141 0.11916382 0.95034478)
+WHITE_POINT_D65 = 95.047 100 108.883
+
+argbFromRgba($rgba) {
+    return shl(alpha($rgba) * 255, 24) + shl(red($rgba), 16) + shl(green($rgba), 8) + blue($rgba)
+}
+
+rgbaFromArgb($argb) {
+    s("rgba(%s, %s, %s, %s)", redFromArgb($argb), greenFromArgb($argb), blueFromArgb($argb), alphaFromArgb($argb) / 255)
+}
+
+// 0..255 -> 0..100
+linearize($rgbComponent) {
+    $normalized = $rgbComponent / 255
+    return $normalized <= 0.040449936 ? ($normalized / 12.92 * 100) : (((($normalized + 0.055) / 1.055) ** 2.4) * 100)
+}
+
+labInvF($ft) {
+    $e = 216 / 24389
+    $kappa = 24389 / 27
+    $ft3 = $ft ** 3
+    return $ft3 > $e ? $ft3 : ((116 * $ft - 16) / $kappa)
+}
+
+labF($t) {
+    $e = 216 / 24389
+    $kappa = 25389 / 27
+    return $t > $e ? $t ** (1 / 3) : ($kappa * $t + 16) / 116
+}
+
+yFromLstar($lstar) {
+    return 100 * labInvF(($lstar + 16) / 116)
+}
+
+lstarFromArgb($argb) {
+    $y = xyzFromArgb($argb)[1]
+    return 116 * labF($y / 100) - 16
+}
+
+xyzFromArgb($argb) {
+    $r = linearize(redFromArgb($argb))
+    $g = linearize(greenFromArgb($argb))
+    $b = linearize(blueFromArgb($argb))
+    retrun matrixMultiply(($r $g $b), SRGB_TO_XYZ)
+}
+
+alphaFromArgb($argb) {
+    return $argb > base16('0xFFFFFF') ? bitwise-and(shr($argb, 24), base16('0xFF')) : 0
+}
+redFromArgb($argb) {
+    return bitwise-and(shr($argb, 16), base16('0xFF'))
+}
+greenFromArgb($argb) {
+    return bitwise-and(shr($argb, 8), base16('0xFF'))
+}
+blueFromArgb($argb) {
+    return bitwise-and($argb, base16('0xFF'))
+}
+
+matrixMultiply($row, $matrix) {
+    $a = $row[0] * $matrix[0][0] + $row[1] * $matrix[0][1] + $row[2] * $matrix[0][2];
+    $b = $row[0] * $matrix[1][0] + $row[1] * $matrix[1][1] + $row[2] * $matrix[1][2];
+    $c = $row[0] * $matrix[2][0] + $row[1] * $matrix[2][1] + $row[2] * $matrix[2][2];
+    return (($a) ($b) ($c))
+}
+
+differenceDegrees($a, $b) {
+    return 180 - abs(abs($a - $b) - 180)
+}
+
+sanitizeDegrees($degrees) {
+    $degrees %= 360
+    $degrees += 360 if $degrees < 0
+    return $degrees
+}
+
+rotationDirection($from, $to) {
+    $increasingDifference = sanitizeDegrees($to - $from)
+    return $increasingDifference <= 180 ? 1 : -1
+}
+
+delinearize($rgbComponent) {
+    $normalized = $rgbComponent / 100
+    $delinearized = $normalized <= 0.0031308 ? $normalized * 12.92 : 1.055 * ($normalized ** (1 / 2.4)) - 0.055
+    return clamp(0, 255, round($delinearized * 255))
+}
+
+argbFromLinRGB($linRGB) {
+    pushLogScope("::argbFromLinRGB")
+    $r = delinearize($linRGB[0])
+    $g = delinearize($linRGB[1])
+    $b = delinearize($linRGB[2])
+    trace("rgb: (" join(', ', ($r $g $b)) ")")
+    popLogScope()
+    return argbFromRgb($r, $g, $b)
+}
+
+argbFromRgb($red, $green, $blue) {
+    return shl(255, 24) + shl($red, 16) + shl($green, 8) + $blue
+}
+
+argbFromLstar($lstar) {
+    $y = yFromLstar($lstar)
+    $component = delinearize($y)
+    return argbFromRgb($component, $component, $component)
+}
+
+// CLASSES
+
+Cam16 = {
+    XYZ_TO_CAM16RGB: \
+        (0.401288 0.650173 -0.051461) \
+        (-0.250268 1.204414 0.045854) \
+        (-0.002079 0.048952 0.953127),
+
+    fromInt: @($argb) {
+        return invoke2(Cam16.fromIntInViewingConditions, $argb, ViewingConditions.DEFAULT)
+    },
+    fromIntInViewingConditions: @($argb, $viewingConditions) {
+        $red = redFromArgb($argb)
+        $green = greenFromArgb($argb)
+        $blue = blueFromArgb($argb)
+
+        $redL = linearize($red)
+        $greenL = linearize($green)
+        $blueL = linearize($blue)
+
+        $x = 0.41233895 * $redL + 0.35762064 * $greenL + 0.18051042 * $blueL
+        $y = 0.2126 * $redL + 0.7152 * $greenL + 0.0722 * $blueL
+        $z = 0.01932141 * $redL + 0.11916382 * $greenL + 0.95034478 * $blueL
+
+        return invoke4(Cam16.fromXyzInViewingConditions, $x, $y, $z, $viewingConditions)
+    },
+    fromXyzInViewingConditions: @($x, $y, $z, $viewingConditions) {
+        //Transform to cone/rgb responses
+        $matrix = Cam16.XYZ_TO_CAM16RGB
+        $rT = ($x * $matrix[0][0]) + ($y * $matrix[0][1]) + ($z * $matrix[0][2])
+        $gT = ($x * $matrix[1][0]) + ($y * $matrix[1][1]) + ($z * $matrix[1][2])
+        $bT = ($x * $matrix[2][0]) + ($y * $matrix[2][1]) + ($z * $matrix[2][2])
+
+        // Discount illuminant
+        $rD = $viewingConditions.rgbD[0] * $rT;
+        $gD = $viewingConditions.rgbD[1] * $gT;
+        $bD = $viewingConditions.rgbD[2] * $bT;
+
+        // Chromatic adaptation
+        $rAF = ($viewingConditions.fl * abs($rD) / 100) ** 0.42
+        $gAF = ($viewingConditions.fl * abs($gD) / 100) ** 0.42
+        $bAF = ($viewingConditions.fl * abs($bD) / 100) ** 0.42
+        $rA = sign($rD) * 400 * $rAF / ($rAF + 27.13)
+        $gA = sign($gD) * 400 * $gAF / ($gAF + 27.13)
+        $bA = sign($bD) * 400 * $bAF / ($bAF + 27.13)
+
+        // redness-greenness
+        $a = (11 * $rA - 12 * $gA + $bA) / 11
+        // yellowness-blueness
+        $b = ($rA + $gA - 2 * $bA) / 9
+
+        // auxiliary components
+        $u = (20 * $rA + 20 * $gA + 21 * $bA) / 20
+        $p2 = (40 * $rA + 20 * $gA + $bA) / 20
+
+        // hue
+        $atan2 = atan2($b, $a)
+        $atanDegrees = radians2Degrees($atan2)
+        $hue = $atanDegrees < 0 ? $atanDegrees + 360 : $atanDegrees >= 360 ? $atanDegrees - 360 : $atanDegrees
+        $hueRadians = degrees2Radians($hue)
+
+        // achromatic response to color
+        $ac = $p2 * $viewingConditions.nbb
+
+        // CAM16 lightness and brightness
+        $j = 100 * (($ac / $viewingConditions.aw) ** ($viewingConditions.c * $viewingConditions.z))
+        $q = 4 / $viewingConditions.c * sqrt($j / 100) * ($viewingConditions.aw + 4) * $viewingConditions.flRoot
+
+        // CAM16 chroma, colorfulness, and saturation
+        $huePrime = $hue < 20.14 ? $hue + 360 : $hue
+        $eHue = 0.25 * (cos(degrees2Radians($huePrime) + 2) + 3.8)
+        $p1 = 50000 / 13 * $eHue * $viewingConditions.nc * $viewingConditions.ncb
+        $t = $p1 * hypot($a, $b) / ($u + 0.305)
+        $alpha = ((1.64 - (0.29 ** $viewingConditions.n)) ** 0.73) * ($t ** 0.9)
+        $c = $alpha * sqrt($j / 100)
+        $m = $c * $viewingConditions.flRoot
+        $s = 50 * sqrt(($alpha * $viewingConditions.c) / ($viewingConditions.aw + 4))
+
+        // CAM16-UCS components
+        $jstar = (1 + 100 * 0.007) * $j / (1 + 0.007 * $j)
+        $mstar = 1 / 0.0228 * log1p(0.0228 * $m)
+        $astar = $mstar * cos($hueRadians)
+        $bstar = $mstar * sin($hueRadians)
+
+        return { hue: $hue, chroma: $c, j: $j, q: $q, m: $m, s: $s, jstar: $jstar, astar: $astar, bstar: $bstar }
+    }
+}
+
+ViewingConditions = {
+    defaultWithBackgroundLstar: @($lstar) {
+        return invoke5(ViewingConditions.make,
+            WHITE_POINT_D65,
+            200 / PI * yFromLstar(50) / 100,
+            $lstar,
+            2,
+            false
+        )
+    },
+    make: @($whitePoint, $adaptingLuminance, $backgroundLstar, $surround, $discountingIlluminant) {
+        $backgroundLstar = max(0.1, $backgroundLstar)
+        $matrix = Cam16.XYZ_TO_CAM16RGB
+        $xyz = $whitePoint
+        $rW = ($xyz[0] * $matrix[0][0]) + ($xyz[1] * $matrix[0][1]) + ($xyz[2] * $matrix[0][2]);
+        $gW = ($xyz[0] * $matrix[1][0]) + ($xyz[1] * $matrix[1][1]) + ($xyz[2] * $matrix[1][2]);
+        $bW = ($xyz[0] * $matrix[2][0]) + ($xyz[1] * $matrix[2][1]) + ($xyz[2] * $matrix[2][2]);
+        $f = 0.8 + ($surround / 10);
+        $c = $f >= 0.9 ? lerp(0.59, 0.69, (($f - 0.9) * 10)) : lerp(0.525, 0.59, (($f - 0.8) * 10))
+        $d = $discountingIlluminant ? 1 : $f * (1 - ((1 / 3.6) * exp((-($adaptingLuminance) - 42) / 92)))
+        $d = clamp(0, 1, $d)
+        $nc = $f
+        $rgbD = ($d * (100 / $rW) + 1 - $d) ($d * (100 / $gW) + 1 - $d) ($d * (100 / $bW) + 1 - $d)
+        $k = 1 / (5 * $adaptingLuminance + 1)
+        $k4 = $k ** 4
+        $k4F = 1 - $k4
+        $fl = ($k4 * $adaptingLuminance) + (0.1 * $k4F * $k4F * cbrt(5 * $adaptingLuminance))
+        $n = yFromLstar($backgroundLstar) / $whitePoint[1]
+        $z = 1.48 + sqrt($n)
+        $nbb = 0.725 / ($n ** 0.2)
+        $ncb = $nbb;
+        $rgbAFactors = (($fl * $rgbD[0] * $rW / 100) ** 0.42) (($fl * $rgbD[1] * $gW / 100) ** 0.42) (($fl * $rgbD[2] * $bW / 100) ** 0.42)
+
+        $rgbA = ((400 * $rgbAFactors[0]) / ($rgbAFactors[0] + 27.13)) ((400 * $rgbAFactors[1]) / ($rgbAFactors[1] + 27.13)) ((400 * $rgbAFactors[2]) / ($rgbAFactors[2] + 27.13))
+
+        $aw = ((2 * $rgbA[0]) + $rgbA[1] + (0.05 * $rgbA[2])) * $nbb;
+        return { n: $n, aw: $aw, nbb: $nbb, ncb: $ncb, c: $c, nc: $nc, rgbD: $rgbD, fl: $fl, flRoot: ($fl ** 0.25), z: $z }
+    }
+}
+ViewingConditions.DEFAULT = invoke1(ViewingConditions.defaultWithBackgroundLstar, 50)
+CorePalette = {
+    of: @($argb) {
+        return invoke2(CorePalette.new, $argb, false)
+    },
+    contentOf: @($argb) {
+        return invoke2(CorePalette.new, $argb, true)
+    },
+    new: @($argb, $isContent) {
+        $hct = invoke1(HCT.fromInt, $argb)
+        $hue = $hct.hue
+        $chroma = $hct.chroma
+        if $isContent {
+            $a1 = invoke2(TonalPalette.fromHueAndChroma, $hue, $chroma)
+            $a2 = invoke2(TonalPalette.fromHueAndChroma, $hue, $chroma / 3)
+            $a3 = invoke2(TonalPalette.fromHueAndChroma, $hue + 60, $chroma / 2)
+            $n1 = invoke2(TonalPalette.fromHueAndChroma, $hue, min($chroma / 12, 4))
+            $n2 = invoke2(TonalPalette.fromHueAndChroma, $hue, min($chroma / 6, 8))
+        } else {
+            $a1 = invoke2(TonalPalette.fromHueAndChroma, $hue, max(48, $chroma))
+            $a2 = invoke2(TonalPalette.fromHueAndChroma, $hue, 16)
+            $a3 = invoke2(TonalPalette.fromHueAndChroma, $hue + 60, 24)
+            $n1 = invoke2(TonalPalette.fromHueAndChroma, $hue, 4)
+            $n2 = invoke2(TonalPalette.fromHueAndChroma, $hue, 8)
+        }
+        $error = invoke2(TonalPalette.fromHueAndChroma, 25, 84)
+        return { a1: $a1, a2: $a2, a3: $a3, n1: $n1, n2: $n2, error: $error }
+    }
+}
+TonalPalette = {
+    fromHueAndChroma: @($hue, $chroma) {
+        $keyColor = invoke2(TonalPalette.KeyColor.create, $hue, $chroma)
+        return invoke3(TonalPalette.new, $hue, $chroma, $keyColor)
+    }
+    tone: @($this, $tone) {
+        return invoke3(HCT.from, $this.hue, $this.chroma, $tone).argb
+    }
+    // A color that represents the hue and chroma of a tonal palette.
+    KeyColor: {
+        MAX_CHROMA_VALUE: 200,
+        // Creates a key color from a [hue] and [chroma]. The key color is the first tone,
+        // starting from T50, matching the given hue and chroma.
+        create: @($hue, $requestedChroma) {
+            pushLogScope("KeyColor::create")
+            trace("> hue: " $hue ", requestedChroma: " $requestedChroma)
+            // Pivot around T50 because T50 has the most chroma available, on
+            // average. Thus it is most likely to have a direct answer.
+            $pivotTone = 50
+            $toneStepSize = 1
+            // Epsilon to accept values slightly higher than the requested chroma.
+            $epsilon = 0.01
+
+            // Binary search to find the tone that can provide a chroma that is closest
+            // to the requested chroma.
+            $lowerTone = 0
+            $upperTone = 100
+            for $i in 0...100 {
+                trace("i: " $i)
+                trace("    lowerTone reached upperTone? (" $lowerTone " >= " $upperTone ") -> " ($lowerTone >= $upperTone))
+                trace("Found key color! (hue: " $hue ", chroma: " $requestedChroma ", tone: " $lowerTone ")") if $lowerTone >= $upperTone
+                trace("    " invoke3(HCT.from, $hue, $requestedChroma, $lowerTone)) if $lowerTone >= $upperTone
+                trace("") if $lowerTone >= $upperTone
+                popLogScope() if $lowerTone >= $upperTone
+                return invoke3(HCT.from, $hue, $requestedChroma, $lowerTone) if $lowerTone >= $upperTone
+
+                $midTone = floor(($lowerTone + $upperTone) / 2)
+                trace("    midTone: " $midTone ", maxChroma: " invoke2(TonalPalette.KeyColor.maxChroma, $hue, $midTone))
+
+                $sufficientChroma = invoke2(TonalPalette.KeyColor.maxChroma, $hue, $midTone) >= ($requestedChroma - $epsilon)
+                if $sufficientChroma {
+                    trace('        sufficient chroma!')
+                    // Either range [lowerTone, midTone] or [midTone, upperTone] has the answer,
+                    // so search in the range that is closer to the pivot tone
+                    if abs($lowerTone - $pivotTone) < abs($upperTone - $pivotTone) {
+                        trace("        upperTone (" $upperTone ") -> " $midTone)
+                        $upperTone = $midTone
+                    } else {
+                        trace("Found key color! (hue: " $hue ", chroma: " $requestedChroma ", tone: " $lowerTone ")") if $lowerTone == $midTone
+                        trace("    " invoke3(HCT.from, $hue, $requestedChroma, $lowerTone)) if $lowerTone == $midTone
+                        trace('') if $lowerTone == $midTone
+                        popLogScope() if $lowerTone == $midTone
+                        return invoke3(HCT.from, $hue, $requestedChroma, $lowerTone) if $lowerTone == $midTone
+                        trace("        lowerTone (" $lowerTone ") -> " $midTone)
+                        $lowerTone = $midTone
+                    }
+                } else {
+                    trace('        insufficient chroma!')
+                    trace("        nextTone: " ($midTone + $toneStepSize) ", maxChroma: " invoke2(TonalPalette.KeyColor.maxChroma, $hue, ($midTone + $toneStepSize)))
+                    // As there is no sufficient chroma in the midTone, follow the direction to the chroma peak
+                    $isAscending = invoke2(TonalPalette.KeyColor.maxChroma, $hue, $midTone) < invoke2(TonalPalette.KeyColor.maxChroma, $hue, ($midTone + $toneStepSize))
+                    if $isAscending {
+                        trace("        lowerTone (" $lowerTone ") -> " ($midTone + $toneStepSize))
+                        $lowerTone = $midTone + $toneStepSize
+                    } else {
+                        trace("        upperTone (" $upperTone ") -> " $midTone)
+                        // Keep midTone for potential chroma peak
+                        $upperTone = $midTone
+                    }
+                }
+            }
+            trace("Found key color! (hue: " $hue ", chroma: " $requestedChroma ", tone: " $lowerTone ")")
+            trace("    " invoke3(HCT.from, $hue, $requestedChroma, $lowerTone))
+            trace("")
+            popLogScope()
+            return invoke3(HCT.from, $hue, $requestedChroma, $lowerTone)
+        },
+        maxChroma: @($hue, $tone) {
+            return invoke3(HCT.from, $hue, TonalPalette.KeyColor.MAX_CHROMA_VALUE, $tone).chroma
+        }
+    },
+    new: @($hue, $chroma, $keyColor) {
+        $this = {
+            hue: $hue,
+            chroma: $chroma,
+            keyColor: $keyColor,
+        }
+        //$this.tone = (@($tone) { invoke2(TonalPalette.tone, $this, $tone) })
+        return $this
+    }
+}
+HCT = {
+    // argb: number
+    // chroma: number
+    // tone: number
+    // argb: number
+
+    // Static
+
+    from: @($hue, $chroma, $tone) {
+        $argb = invoke3(HCTSolver.solveToInt, $hue, $chroma, $tone)
+        return invoke1(HCT.new, $argb)
+    },
+    fromInt: @($argb) {
+        return invoke1(HCT.new, $argb)
+    },
+
+    // Member
+
+    new: @($argb) {
+        $this = {}
+        $this._setInternalState = (@($argb) { invoke2(HCT._setInternalState, $this, $argb) })
+        invoke1($this._setInternalState, $argb)
+        return $this
+    },
+
+    _setInternalState: @($this, $argb) {
+        $this.argb = $argb
+        $cam = invoke1(Cam16.fromInt, $argb)
+        $this.hue = $cam.hue
+        $this.chroma = $cam.chroma
+        $this.tone = lstarFromArgb($argb)
+    },
+}
+
+HCTSolver = {
+    SCALED_DISCOUNT_FROM_LINRGB: \
+        (0.001200833568784504 0.002389694492170889 0.0002795742885861124) \
+        (0.0005891086651375999 0.0029785502573438758 0.0003270666104008398) \
+        (0.00010146692491640572 0.0005364214359186694 0.0032979401770712076),
+    LINRGB_FROM_SCALED_DISCOUNT: \
+        (1373.2198709594231 (-1100.4251190754821) (-7.278681089101213)) \
+        (-271.815969077903 559.6580465940733 (-32.46047482791194)) \
+        (1.9622899599665666 (-57.173814538844006) 308.7233197812385),
+    Y_FROM_LINRGB: 0.2126 0.7152 0.0722,
+    CRITICAL_PLANES: \
+        0.015176349177441876 \
+        0.045529047532325624 \
+        0.07588174588720938 \
+        0.10623444424209313 \
+        0.13658714259697685 \
+        0.16693984095186062 \
+        0.19729253930674434 \
+        0.2276452376616281 \
+        0.2579979360165119 \
+        0.28835063437139563 \
+        0.3188300904430532 \
+        0.350925934958123 \
+        0.3848314933096426 \
+        0.42057480301049466 \
+        0.458183274052838 \
+        0.4976837250274023 \
+        0.5391024159806381 \
+        0.5824650784040898 \
+        0.6277969426914107 \
+        0.6751227633498623 \
+        0.7244668422128921 \
+        0.775853049866786 \
+        0.829304845476233 \
+        0.8848452951698498 \
+        0.942497089126609 \
+        1.0022825574869039 \
+        1.0642236851973577 \
+        1.1283421258858297 \
+        1.1946592148522128 \
+        1.2631959812511864 \
+        1.3339731595349034 \
+        1.407011200216447 \
+        1.4823302800086415 \
+        1.5599503113873272 \
+        1.6398909516233677 \
+        1.7221716113234105 \
+        1.8068114625156377 \
+        1.8938294463134073 \
+        1.9832442801866852 \
+        2.075074464868551 \
+        2.1693382909216234 \
+        2.2660538449872063 \
+        2.36523901573795 \
+        2.4669114995532007 \
+        2.5710888059345764 \
+        2.6777882626779785 \
+        2.7870270208169257 \
+        2.898822059350997 \
+        3.0131901897720907 \
+        3.1301480604002863 \
+        3.2497121605402226 \
+        3.3718988244681087 \
+        3.4967242352587946 \
+        3.624204428461639 \
+        3.754355295633311 \
+        3.887192587735158 \
+        4.022731918402185 \
+        4.160988767090289 \
+        4.301978482107941 \
+        4.445716283538092 \
+        4.592217266055746 \
+        4.741496401646282 \
+        4.893568542229298 \
+        5.048448422192488 \
+        5.20615066083972 \
+        5.3666897647573375 \
+        5.5300801301023865 \
+        5.696336044816294 \
+        5.865471690767354 \
+        6.037501145825082 \
+        6.212438385869475 \
+        6.390297286737924 \
+        6.571091626112461 \
+        6.7548350853498045 \
+        6.941541251256611 \
+        7.131223617812143 \
+        7.323895587840543 \
+        7.5195704746346665 \
+        7.7182615035334345 \
+        7.919981813454504 \
+        8.124744458384042 \
+        8.332562408825165 \
+        8.543448553206703 \
+        8.757415699253682 \
+        8.974476575321063 \
+        9.194643831691977 \
+        9.417930041841839 \
+        9.644347703669503 \
+        9.873909240696694 \
+        10.106627003236781 \
+        10.342513269534024 \
+        10.58158024687427 \
+        10.8238400726681 \
+        11.069304815507364 \
+        11.317986476196008 \
+        11.569896988756009 \
+        11.825048221409341 \
+        12.083451977536606 \
+        12.345119996613247 \
+        12.610063955123938 \
+        12.878295467455942 \
+        13.149826086772048 \
+        13.42466730586372 \
+        13.702830557985108 \
+        13.984327217668513 \
+        14.269168601521828 \
+        14.55736596900856 \
+        14.848930523210871 \
+        15.143873411576273 \
+        15.44220572664832 \
+        15.743938506781891 \
+        16.04908273684337 \
+        16.35764934889634 \
+        16.66964922287304 \
+        16.985093187232053 \
+        17.30399201960269 \
+        17.62635644741625 \
+        17.95219714852476 \
+        18.281524751807332 \
+        18.614349837764564 \
+        18.95068293910138 \
+        19.290534541298456 \
+        19.633915083172692 \
+        19.98083495742689 \
+        20.331304511189067 \
+        20.685334046541502 \
+        21.042933821039977 \
+        21.404114048223256 \
+        21.76888489811322 \
+        22.137256497705877 \
+        22.50923893145328 \
+        22.884842241736916 \
+        23.264076429332462 \
+        23.6469514538663 \
+        24.033477234264016 \
+        24.42366364919083 \
+        24.817520537484558 \
+        25.21505769858089 \
+        25.61628489293138 \
+        26.021211842414342 \
+        26.429848230738664 \
+        26.842203703840827 \
+        27.258287870275353 \
+        27.678110301598522 \
+        28.10168053274597 \
+        28.529008062403893 \
+        28.96010235337422 \
+        29.39497283293396 \
+        29.83362889318845 \
+        30.276079891419332 \
+        30.722335150426627 \
+        31.172403958865512 \
+        31.62629557157785 \
+        32.08401920991837 \
+        32.54558406207592 \
+        33.010999283389665 \
+        33.4802739966603 \
+        33.953417292456834 \
+        34.430438229418264 \
+        34.911345834551085 \
+        35.39614910352207 \
+        35.88485700094671 \
+        36.37747846067349 \
+        36.87402238606382 \
+        37.37449765026789 \
+        37.87891309649659 \
+        38.38727753828926 \
+        38.89959975977785 \
+        39.41588851594697 \
+        39.93615253289054 \
+        40.460400508064545 \
+        40.98864111053629 \
+        41.520882981230194 \
+        42.05713473317016 \
+        42.597404951718396 \
+        43.141702194811224 \
+        43.6900349931913 \
+        44.24241185063697 \
+        44.798841244188324 \
+        45.35933162437017 \
+        45.92389141541209 \
+        46.49252901546552 \
+        47.065252796817916 \
+        47.64207110610409 \
+        48.22299226451468 \
+        48.808024568002054 \
+        49.3971762874833 \
+        49.9904556690408 \
+        50.587870934119984 \
+        51.189430279724725 \
+        51.79514187861014 \
+        52.40501387947288 \
+        53.0190544071392 \
+        53.637271562750364 \
+        54.259673423945976 \
+        54.88626804504493 \
+        55.517063457223934 \
+        56.15206766869424 \
+        56.79128866487574 \
+        57.43473440856916 \
+        58.08241284012621 \
+        58.734331877617365 \
+        59.39049941699807 \
+        60.05092333227251 \
+        60.715611475655585 \
+        61.38457167773311 \
+        62.057811747619894 \
+        62.7353394731159 \
+        63.417162620860914 \
+        64.10328893648692 \
+        64.79372614476921 \
+        65.48848194977529 \
+        66.18756403501224 \
+        66.89098006357258 \
+        67.59873767827808 \
+        68.31084450182222 \
+        69.02730813691093 \
+        69.74813616640164 \
+        70.47333615344107 \
+        71.20291564160104 \
+        71.93688215501312 \
+        72.67524319850172 \
+        73.41800625771542 \
+        74.16517879925733 \
+        74.9167682708136 \
+        75.67278210128072 \
+        76.43322770089146 \
+        77.1981124613393 \
+        77.96744375590167 \
+        78.74122893956174 \
+        79.51947534912904 \
+        80.30219030335869 \
+        81.08938110306934 \
+        81.88105503125999 \
+        82.67721935322541 \
+        83.4778813166706 \
+        84.28304815182372 \
+        85.09272707154808 \
+        85.90692527145302 \
+        86.72564993000343 \
+        87.54890820862819 \
+        88.3767072518277 \
+        89.2090541872801 \
+        90.04595612594655 \
+        90.88742016217518 \
+        91.73345337380438 \
+        92.58406282226491 \
+        93.43925555268066 \
+        94.29903859396902 \
+        95.16341895893969 \
+        96.03240364439274 \
+        96.9059996312159 \
+        97.78421388448044 \
+        98.6670533535366 \
+        99.55452497210776,
+
+    // Finds an sRGB color with the given hue, chroma, and L*, if possible
+    // Returns an sRGB color with sufficiently close hue, chroma, and L* to the desired values, if possible
+    // Otherwise, the hue and L* will be sufficient close, and chroma will be maximized
+    solveToInt: @($hueDegrees, $chroma, $lstar) {
+        pushLogScope("HCTSolver::solveToInt")
+        trace("> hueDegrees: " $hueDegrees ", chroma: " $chroma ", tone/lstar: " $lstar)
+        popLogScope() if $chroma < 0.0001 or $lstar < 0.0001 or $lstar > 99.9999
+        return argbFromLstar($lstar) if $chroma < 0.0001 or $lstar < 0.0001 or $lstar > 99.9999
+        $hueDegrees = sanitizeDegrees($hueDegrees)
+        trace("sanitized hueDegrees: " $hueDegrees)
+        $hueRadians = degrees2Radians($hueDegrees)
+        trace("hueRadians: " $hueRadians)
+        $y = yFromLstar($lstar)
+        trace("y: " $y)
+        $exactAnswer = invoke3(HCTSolver.findResultByJ, $hueRadians, $chroma, $y)
+        trace("exactAnswer: " $exactAnswer)
+        popLogScope() if $exactAnswer != 0
+        return $exactAnswer if $exactAnswer != 0
+        $linRGB = invoke2(HCTSolver.bisectToLimit, $y, $hueRadians)
+        trace("linRGB: " listToString($linRGB))
+        trace("rgbaFromLinRGB: " rgbaFromArgb(argbFromLinRGB($linRGB)))
+        trace("< " argbFromLinRGB($linRGB))
+        popLogScope()
+        return argbFromLinRGB($linRGB)
+    },
+    // Finds a color with the given hue, chroma, and Y
+    // Returns the argb color if found, otherwise 0
+    findResultByJ: @($hueRadians, $chroma, $y) {
+        pushLogScope("HCTSolver::findResultByJ")
+        trace("> hueRadians: " $hueRadians ", chroma: " $chroma ", y: " $y)
+        // initial estimate of J
+        $j = sqrt($y) * 11
+        $viewingConditions = ViewingConditions.DEFAULT;
+        $tInnerCoeff = 1 / ((1.64 - (0.29 ** $viewingConditions.n)) ** 0.73)
+        $eHue = 0.25 * (cos($hueRadians + 2) + 3.8)
+        $p1 = $eHue * (50000 / 13) * $viewingConditions.nc * $viewingConditions.ncb;
+        $hSin = sin($hueRadians)
+        $hCos = cos($hueRadians)
+        for $iterationRound in 0...5 {
+            $jNormalized = $j / 100
+            $alpha = $chroma == 0 or $j == 0 ? 0 : $chroma / sqrt($jNormalized)
+            $t = ($alpha * $tInnerCoeff) ** (1 / 0.9)
+            $ac = $viewingConditions.aw * ($jNormalized ** (1 / $viewingConditions.c / $viewingConditions.z))
+            $p2 = $ac / $viewingConditions.nbb
+            $gamma = 23 * ($p2 + 0.305) * $t / (23 * $p1 + 11 * $t * $hCos + 108 * $t * $hSin)
+            $a = $gamma * $hCos
+            $b = $gamma * $hSin
+            $rA = (460 * $p2 + 451 * $a + 288 * $b) / 1403
+            $gA = (460 * $p2 - 891 * $a - 261 * $b) / 1403
+            $bA = (460 * $p2 - 220 * $a - 6300 * $b) / 1403
+            $rCScaled = invoke1(HCTSolver.inverseChromaticAdaptation, $rA)
+            $gCScaled = invoke1(HCTSolver.inverseChromaticAdaptation, $gA)
+            $bCScaled = invoke1(HCTSolver.inverseChromaticAdaptation, $bA)
+            trace("rgbCScaled: " listToString(($rCScaled $gCScaled $bCScaled)))
+            trace("LINRGB_FROM_SCALED_DISCOUNT: " nestedListToString(HCTSolver.LINRGB_FROM_SCALED_DISCOUNT))
+            $linRGB = matrixMultiply(($rCScaled $gCScaled $bCScaled), HCTSolver.LINRGB_FROM_SCALED_DISCOUNT)
+            trace("linRGB: " listToString($linRGB))
+
+            trace("< 0") if $linRGB[0] < 0 or $linRGB[1] < 0 or $linRGB[2] < 0
+            popLogScope() if $linRGB[0] < 0 or $linRGB[1] < 0 or $linRGB[2] < 0
+            return 0 if $linRGB[0] < 0 or $linRGB[1] < 0 or $linRGB[2] < 0
+            $kR = HCTSolver.Y_FROM_LINRGB[0]
+            $kG = HCTSolver.Y_FROM_LINRGB[1]
+            $kB = HCTSolver.Y_FROM_LINRGB[2]
+            $fnj = $kR * $linRGB[0] + $kG * $linRGB[1] + $kB * $linRGB[2]
+            trace("< 0") if $fnj <= 0
+            popLogScope() if $fnj <= 0
+            return 0 if $fnj <= 0
+            if $iterationRound == 4 or abs($fnj - $y) < 0.002 {
+                trace("< 0") if $linRGB[0] > 100.01 or $linRGB[1] > 100.01 or $linRGB[2] > 100.01
+                popLogScope() if $linRGB[0] > 100.01 or $linRGB[1] > 100.01 or $linRGB[2] > 100.01
+                return 0 if $linRGB[0] > 100.01 or $linRGB[1] > 100.01 or $linRGB[2] > 100.01
+                trace("< " argbFromLinRGB($linRGB))
+                popLogScope()
+                return argbFromLinRGB($linRGB)
+            }
+            // Iterates with Newton method,
+            // Using 2 * fn(j) / j as the approximation of fn'(j)
+            $j = $j - ($fnj - $y) * $j / (2 * $fnj)
+        }
+        trace("< 0")
+        popLogScope()
+        return 0
+    },
+    chromaticAdaptation: @($component) {
+        $af = abs($component) ** 0.42
+        return sign($component) * 400 * $af / ($af + 27.13)
+    },
+    inverseChromaticAdaptation: @($adapted) {
+        $adaptedAbs = abs($adapted)
+        $base = max(0, 27.13 * $adaptedAbs / (400 - $adaptedAbs))
+        return sign($adapted) * ($base ** (1 / 0.42))
+    },
+    // Finds a color with the Given Y and hue on the boundary of the cube
+    // Returns the desired color, in linear RGB coordinates
+    bisectToLimit: @($y, $targetHue) {
+        pushLogScope("HCTSolver::bisectToLimit")
+        trace("> y: " $y ", targetHue: " $targetHue)
+        $segment = invoke2(HCTSolver.bisectToSegment, $y, $targetHue)
+        trace("segment: " nestedListToString($segment))
+        $left = $segment[0]
+        trace("left: " listToString($left))
+        $leftHue = invoke1(HCTSolver.hueOf, $left)
+        trace("leftHue: " $leftHue)
+        $right = $segment[1]
+        trace("right: " listToString($right))
+        for $axis in 0...3 {
+            trace("left[" $axis "]: " $left[$axis])
+            trace("right[" $axis "]: " $right[$axis])
+            if $left[$axis] != $right[$axis] {
+                $lPlane = -1
+                $rPlane = 255
+                if $left[$axis] < $right[$axis] {
+                    $lPlane = invoke1(HCTSolver.criticalPlaneBelow, invoke1(HCTSolver.trueDelinearize, $left[$axis]))
+                    $rPlane = invoke1(HCTSolver.criticalPlaneAbove, invoke1(HCTSolver.trueDelinearize, $right[$axis]))
+                } else {
+                    $lPlane = invoke1(HCTSolver.criticalPlaneAbove, invoke1(HCTSolver.trueDelinearize, $left[$axis]))
+                    $rPlane = invoke1(HCTSolver.criticalPlaneBelow, invoke1(HCTSolver.trueDelinearize, $right[$axis]))
+                }
+                trace("lPlane: " $lPlane)
+                trace("rPlane: " $rPlane)
+                for $i in 0...8 {
+                    if abs($rPlane - $lPlane) > 1 {
+                        $mPlane = floor(($lPlane + $rPlane) / 2)
+                        trace("mPlane: " $mPlane)
+                        $midPlaneCoordinate = HCTSolver.CRITICAL_PLANES[$mPlane]
+                        trace("midPlaneCoordinate: " $midPlaneCoordinate)
+                        $mid = invoke4(HCTSolver.setCoordinate, $left, $midPlaneCoordinate, $right, $axis)
+                        trace("mid: " listToString($mid))
+                        $midHue = invoke1(HCTSolver.hueOf, $mid)
+                        trace("midHue: " $midHue)
+                        if invoke3(HCTSolver.areInCyclicOrder, $leftHue, $targetHue, $midHue) {
+                            $right = $mid
+                            $rPlane = $mPlane
+                        } else {
+                            $left = $mid
+                            $leftHue = $midHue
+                            $lPlane = $mPlane
+                        }
+                    }
+                }
+            }
+        }
+        trace("< " listToString(invoke2(HCTSolver.midpoint, $left, $right)))
+        popLogScope()
+        return invoke2(HCTSolver.midpoint, $left, $right)
+    },
+    // Finds the segment containing the desired color
+    // Returns a list of two sets of linear RGB coordinates, each corresponding to
+    // an endpoint of the segment containing the desired color
+    bisectToSegment: @($y, $targetHue) {
+        pushLogScope("HCTSolver::bisectToSegment")
+        trace("> y: " $y ", targetHue: " $targetHue)
+        $left = ((-1) (-1) (-1))
+        $right = $left
+        $leftHue = 0
+        $rightHue = 0
+        $initialized = false
+        $uncut = true
+        for $n in 0...12 {
+            trace("n: " $n)
+            trace("left: " listToString($left))
+            trace("right: " listToString($right))
+            trace("leftHue: " $leftHue)
+            trace("rightHue: " $rightHue)
+            trace("initialized: " $initialized)
+            trace("uncut: " $uncut)
+            $mid = invoke2(HCTSolver.nthVertex, $y, $n)
+            trace("mid: " listToString($mid))
+            if $mid[0] >= 0 {
+                $midHue = invoke1(HCTSolver.hueOf, $mid)
+                trace("midHue: " $midHue)
+                if !$initialized {
+                    $left = $mid
+                    $right = $mid
+                    $leftHue = $midHue
+                    $rightHue = $midHue
+                    $initialized = true
+                } else if $uncut or invoke3(HCTSolver.areInCyclicOrder, $leftHue, $midHue, $rightHue) {
+                    $uncut = false
+                    if invoke3(HCTSolver.areInCyclicOrder, $leftHue, $targetHue, $midHue) {
+                        $right = $mid
+                        $rightHue = $midHue
+                    } else {
+                        $left = $mid
+                        $leftHue = $midHue
+                    }
+                }
+            }
+        }
+        trace("< " nestedListToString(($left $right)))
+        popLogScope()
+        return ($left $right)
+    },
+    hueOf: @($linRGB) {
+        pushLogScope("HCTSolver::hueOf")
+        trace("> " listToString($linRGB))
+        $scaledDiscount = matrixMultiply($linRGB, HCTSolver.SCALED_DISCOUNT_FROM_LINRGB)
+        $rA = invoke1(HCTSolver.chromaticAdaptation, $scaledDiscount[0])
+        $gA = invoke1(HCTSolver.chromaticAdaptation, $scaledDiscount[1])
+        $bA = invoke1(HCTSolver.chromaticAdaptation, $scaledDiscount[2])
+        // redness-greenness
+        $a = (11 * $rA + (-12 * $gA) + $bA) / 11
+        // yellowness-blueness
+        $b = ($rA + $gA - 2 * $bA) / 9
+        trace("< " atan2($b, $a))
+        popLogScope()
+        return atan2($b, $a)
+    },
+    areInCyclicOrder: @($a, $b, $c) {
+        pushLogScope("HCTSolver::areInCyclicOrder")
+        trace("> a: " $a ", b: " $b ", c: " $c)
+        $deltaAB = invoke1(HCTSolver.sanitizeRadians, $b - $a)
+        trace("deltaAB: " $deltaAB)
+        $deltaAC = invoke1(HCTSolver.sanitizeRadians, $c - $a)
+        trace("deltaAC: " $deltaAC)
+        trace("< " ($deltaAB < $deltaAC))
+        popLogScope()
+        return $deltaAB < $deltaAC
+    },
+    sanitizeRadians: @($angle) {
+        $dividend = $angle + PI * 8
+        return $dividend % TAU
+    },
+    trueDelinearize: @($rgbComponent) {
+        pushLogScope("HCTSolver::trueDelinearize")
+        trace("> rgbComponent: " $rgbComponent)
+        $normalized = $rgbComponent / 100
+        $delinearized = $normalized <= 0.0031308 ? $normalized * 12.92 : 1.055 * ($normalized ** (1 / 2.4)) - 0.055
+        trace("< " ($delinearized * 255))
+        popLogScope()
+        return $delinearized * 255
+    },
+    nthVertex: @($y, $n) {
+        $kR = HCTSolver.Y_FROM_LINRGB[0]
+        $kG = HCTSolver.Y_FROM_LINRGB[1]
+        $kB = HCTSolver.Y_FROM_LINRGB[2]
+        $coordA = $n % 4 <= 1 ? 0 : 100
+        $coordB = $n % 2 == 0 ? 0 : 100
+        if $n < 4 {
+            $g = $coordA
+            $b = $coordB
+            $r = ($y - $g * $kG - $b * $kB) / $kR
+            return invoke1(HCTSolver.isBounded, $r) ? ($r $g $b) : ((-1) (-1) (-1))
+        } else if $n < 8 {
+            $b = $coordA
+            $r = $coordB
+            $g = ($y - $r * $kR - $b * $kB) / $kG
+            return invoke1(HCTSolver.isBounded, $g) ? ($r $g $b) : ((-1) (-1) (-1))
+        } else {
+            $r = $coordA
+            $g = $coordB
+            $b = ($y - $r * $kR - $g * $kG) / $kB
+            return invoke1(HCTSolver.isBounded, $b) ? ($r $g $b) : ((-1) (-1) (-1))
+        }
+    },
+    criticalPlaneBelow: @($x) {
+        return floor($x - 0.5)
+    },
+    criticalPlaneAbove: @($x) {
+        return ceil($x - 0.5)
+    },
+    midpoint: @($a, $b) {
+        return (($a[0] + $b[0]) / 2) (($a[1] + $b[1]) / 2) (($a[2] + $b[2]) / 2)
+    },
+    setCoordinate: @($source, $coordinate, $target, $axis) {
+        $t = invoke3(HCTSolver.intercept, $source[$axis], $coordinate, $target[$axis])
+        return invoke3(HCTSolver.lerpPoint, $source, $t, $target)
+    },
+    isBounded: @($x) {
+        return 0 <= $x and $x <= 100
+    },
+    intercept: @($source, $mid, $target) {
+        return ($mid - $source) / ($target - $source)
+    },
+    lerpPoint: @($source, $t, $target) {
+        return \
+            ($source[0] + ($target[0] - $source[0]) * $t) \
+            ($source[1] + ($target[1] - $source[1]) * $t) \
+            ($source[2] + ($target[2] - $source[2]) * $t)
+    }
+}
+
+Theme = {
+    new: @($source, $schemes, $palettes, $customColors) {
+        $this = {
+            source: $source,
+            schemes: $schemes,
+            palettes: $palettes,
+            customColors: $customColors
+        }
+        return $this
+    }
+}
+
+Scheme = {
+    light: @($argb) {
+        return invoke1(Scheme.lightFromCorePalette, invoke1(CorePalette.of, $argb))
+    },
+    dark: @($argb) {
+        return invoke1(Scheme.darkFromCorePalette, invoke1(CorePalette.of, $argb))
+    },
+    lightContent: @($argb) {
+        return invoke1(Scheme.lightFromCorePalette, invoke1(CorePalette.contentOf, $argb))
+    },
+    darkContent: @($argb) {
+        return invoke1(Scheme.darkFromCorePalette, invoke1(CorePalette.contentOf, $argb))
+    },
+    lightFromCorePalette: @($core) {
+        $this = {
+            primary: invoke2(TonalPalette.tone, $core.a1, 40),
+            onPrimary: invoke2(TonalPalette.tone, $core.a1, 100),
+            primaryContainer: invoke2(TonalPalette.tone, $core.a1, 90),
+            onPrimaryContainer: invoke2(TonalPalette.tone, $core.a1, 10),
+            secondary: invoke2(TonalPalette.tone, $core.a2, 40),
+            onSecondary: invoke2(TonalPalette.tone, $core.a2, 100),
+            secondaryContainer: invoke2(TonalPalette.tone, $core.a2, 90),
+            onSecondaryContainer: invoke2(TonalPalette.tone, $core.a2, 10),
+            tertiary: invoke2(TonalPalette.tone, $core.a3, 40),
+            onTertiary: invoke2(TonalPalette.tone, $core.a3, 100),
+            tertiaryContainer: invoke2(TonalPalette.tone, $core.a3, 90),
+            onTertiaryContainer: invoke2(TonalPalette.tone, $core.a3, 10),
+            error: invoke2(TonalPalette.tone, $core.error, 40),
+            onError: invoke2(TonalPalette.tone, $core.error, 100),
+            errorContainer: invoke2(TonalPalette.tone, $core.error, 90),
+            onErrorContainer: invoke2(TonalPalette.tone, $core.error, 10),
+            background: invoke2(TonalPalette.tone, $core.n1, 99),
+            onBackground: invoke2(TonalPalette.tone, $core.n1, 10),
+            surface: invoke2(TonalPalette.tone, $core.n1, 99),
+            onSurface: invoke2(TonalPalette.tone, $core.n1, 10),
+            surfaceVariant: invoke2(TonalPalette.tone, $core.n2, 90),
+            onSurfaceVariant: invoke2(TonalPalette.tone, $core.n2, 30),
+            outline: invoke2(TonalPalette.tone, $core.n2, 50),
+            outlineVariant: invoke2(TonalPalette.tone, $core.n2, 80),
+            shadow: invoke2(TonalPalette.tone, $core.n1, 0),
+            scrim: invoke2(TonalPalette.tone, $core.n1, 0),
+            inverseSurface: invoke2(TonalPalette.tone, $core.n1, 20),
+            inverseOnSurface: invoke2(TonalPalette.tone, $core.n1, 95),
+            inversePrimary: invoke2(TonalPalette.tone, $core.a1, 80),
+        }
+        return $this
+    },
+    darkFromCorePalette: @($core) {
+        $this = {
+            primary: invoke2(TonalPalette.tone, $core.a1, 80),
+            onPrimary: invoke2(TonalPalette.tone, $core.a1, 20),
+            primaryContainer: invoke2(TonalPalette.tone, $core.a1, 30),
+            onPrimaryContainer: invoke2(TonalPalette.tone, $core.a1, 90),
+            secondary: invoke2(TonalPalette.tone, $core.a2, 80),
+            onSecondary: invoke2(TonalPalette.tone, $core.a2, 20),
+            secondaryContainer: invoke2(TonalPalette.tone, $core.a2, 30),
+            onSecondaryContainer: invoke2(TonalPalette.tone, $core.a2, 90),
+            tertiary: invoke2(TonalPalette.tone, $core.a3, 80),
+            onTertiary: invoke2(TonalPalette.tone, $core.a3, 20),
+            tertiaryContainer: invoke2(TonalPalette.tone, $core.a3, 30),
+            onTertiaryContainer: invoke2(TonalPalette.tone, $core.a3, 90),
+            error: invoke2(TonalPalette.tone, $core.error, 80),
+            onError: invoke2(TonalPalette.tone, $core.error, 30),
+            errorContainer: invoke2(TonalPalette.tone, $core.error, 30),
+            onErrorContainer: invoke2(TonalPalette.tone, $core.error, 80),
+            background: invoke2(TonalPalette.tone, $core.n1, 10),
+            onBackground: invoke2(TonalPalette.tone, $core.n1, 90),
+            surface: invoke2(TonalPalette.tone, $core.n1, 10),
+            onSurface: invoke2(TonalPalette.tone, $core.n1, 90),
+            surfaceVariant: invoke2(TonalPalette.tone, $core.n2, 30),
+            onSurfaceVariant: invoke2(TonalPalette.tone, $core.n2, 80),
+            outline: invoke2(TonalPalette.tone, $core.n2, 60),
+            outlineVariant: invoke2(TonalPalette.tone, $core.n2, 30),
+            shadow: invoke2(TonalPalette.tone, $core.n1, 0),
+            scrim: invoke2(TonalPalette.tone, $core.n1, 0),
+            inverseSurface: invoke2(TonalPalette.tone, $core.n1, 90),
+            inverseOnSurface: invoke2(TonalPalette.tone, $core.n1, 20),
+            inversePrimary: invoke2(TonalPalette.tone, $core.a1, 40),
+        }
+        return $this
+    },
+}
+
+themeFromSourceColor($source, $customColors = ()) {
+    $palette = invoke1(CorePalette.of, $source)
+    $schemes = {
+        light: invoke1(Scheme.light, $source),
+        dark: invoke1(Scheme.dark, $source),
+    }
+    $palettes = {
+        primary: $palette.a1,
+        secondary: $palette.a2,
+        tertiary: $palette.a3,
+        neutral: $palette.n1,
+        neutralVariant: $palette.n2,
+        error: $palette.error,
+    }
+    $customColors = map($customColors, @($c) { customColor($source, $c) })
+    return invoke4(Theme.new, $source, $schemes, $palettes, $customColors)
+}
+
+customColor($source, $color) {
+    $value = $color.value
+    $from = clone($value)
+    $to = $source
+    $value = invoke2(Blend.harmonize, $from, $to) if $color.blend
+    $palette = invoke1(CorePalette.of, $value)
+    $tones = $palette.a1
+    return invoke4(CustomColorGroup.new,
+        $color,
+        $value,
+        /* $light: */ invoke4(ColorGroup.new,
+            /* $color: */ invoke1($tones.tone, 40),
+            /* $onColor: */ invoke1($tones.tone, 100),
+            /* $colorContainer: */ invoke1($tones.tone, 90),
+            /* $onColorContainer: */ invoke1($tones.tone, 10)
+        ),
+        /* $dark: */ invoke4(ColorGroup.new,
+            /* $color: */ invoke1($tones.tone, 80),
+            /* $onColor: */ invoke1($tones.tone, 20),
+            /* $colorContainer: */ invoke1($tones.tone, 30),
+            /* $onColorContainer: */ invoke1($tones.tone, 90)
+        )
+    )
+}
+
+CustomColor = {
+    new: @($value, $name, $blend) {
+        return { value: $value, name: $name, blend: $blend }
+    }
+}
+ColorGroup = {
+    new: @($color, $onColor, $colorContainer, $onColorContainer) {
+        return { color: $color, onColor: $onColor, colorContainer: $colorContainer, onColorContainer: $onColorContainer }
+    }
+}
+CustomColorGroup = {
+    new: @($color, $value, $light, $dark) {
+        return { color: $color, value: $value, light: $light, dark: $dark }
+    }
+}
+
+Blend = {
+    harmonize: @($designColor, $sourceColor) {
+        $fromHct = invoke1(HCT.fromInt, $designColor)
+        $toHct = invoke1(HCT.fromInt, $sourceColor)
+        $differenceDegrees = differenceDegrees($fromHct.hue, $toHct.hue)
+        $rotationDegrees = min($differenceDegrees * 0.5, 15)
+        $outputHue = sanitizeDegrees($fromHct.hue + $rotationDegrees * rotationDirection($fromHct.hue, $toHct.hue))
+        return invoke3(HCT.from, $outputHue, $fromHct.chroma, $fromHct.tone).rgba
+    }
+}
+
+// MAIN
+
+buildPalette($color, $customColors = (), $dark = false, $selector = null) {
+    error("Invalid color: " + $color) unless $color is a 'rgba'
+
+    $selector = ":root" if $selector is a 'null'
+    $selector = unquote($selector) if $selector is a 'string'
+
+    cv($name, $color) {
+        s("    --material-color-%s: %s;", $name, $color)
+    }
+
+    $argb = argbFromRgba($color)
+    $theme = themeFromSourceColor($argb, $customColors)
+
+    $scheme = $dark ? $theme.schemes.dark : $theme.schemes.light
+
+    s("  %s {", $selector)
+    for $name, $argb in $scheme {
+        cv(s($name), rgbaFromArgb($argb))
+    }
+    s("  }")
+}
+
+@-moz-document domain("stylus-lang.com")
+    buildPalette(#00ed8b, $dark: true)
+
+    //hctSolver-test {
+    //    --hue: 157.20027653439868
+    //    --chroma: 73.68862852334654
+    //    --tone-lstar: 83.14286324835774
+    //    --result: rgbaFromArgb(invoke3(HCTSolver.solveToInt, 157.20027653439868, 73.68862852334654, 83.14286324835774))
+    //}
+    //
+    //sanitizeRadians-test {
+    //    --a: 0.47815524661027703
+    //    --b: 2.743662410570838
+    //    --angle: 2.743662410570838 - 0.47815524661027703
+    //    --result: invoke1(HCTSolver.sanitizeRadians, 2.743662410570838 - 0.47815524661027703)
+    //}
+
+    //test {
+    //    $color = #00ed8b
+    //    --hex: $color
+    //    $int = argbFromRgba($color)
+    //    --int: $int
+    //    $rgba = rgbaFromArgb($int)
+    //    --rgba: $rgba
+    //
+    //    /* math */
+    //    --bitwise-and: bitwise-and(4, 2) /* 4 & 2 */
+    //    --base2: base2('0b10') /* 0b10 */
+    //    --base16: base16('0x00ff0000') /* 0x00ff0000 */
+    //    --green: shr(bitwise-and(argbFromRgba($color), base16('0x0000ff00')), 8) /* 0x00ed8b & 0x0000ff00 >> 8 */
+    //    --red: shr(bitwise-and(argbFromRgba($color), base16('0x00ff0000')), 16) /* 0x00ed8b & 0x00ff0000 >> 16 */
+    //
+    //    /* lstarFromArgb */
+    //    --lstarFromArgb-tone: lstarFromArgb(4278250891) /* expected 83.14286324835774 */
+    //
+    //    /* Cam16.fromInt */
+    //    $cam16-fromInt = invoke1(Cam16.fromInt, 4278250891)
+    //    --cam16-fromInt: $cam16-fromInt
+    //    --cam16-fromInt-hue: $cam16-fromInt.hue /* expected 157.20027653439868 */
+    //    --cam16-fromInt-chroma: $cam16-fromInt.chroma /* expected 73.68862852334654 */
+    //
+    //    /* HCTSolver.solveToInt */
+    //    $hctSolver-solveToInt = invoke3(HCTSolver.solveToInt, 157.20027653439868, 73.68862852334654, 50)
+    //    --hctSolver-solveToInt-rgba: rgbaFromArgb($hctSolver-solveToInt) /* expected rgba(0, 137, 77, 1)
+    //
+    //    /* HCT.from */
+    //    $hct-from = invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 83.14286324835774)
+    //    --hct-from-hue: $hct-from.hue /* expected 157.20027653439868 */
+    //    --hct-from-chroma: $hct-from.chroma /* expected 73.68862852334654 */
+    //    --hct-from-tone: $hct-from.tone /* expected 83.14286324835774 */
+    //    --hct-from-rgba: rgbaFromArgb($hct-from.argb)
+    //
+    //    /* HCT.fromInt */
+    //    $hct-fromInt = invoke1(HCT.fromInt, 4278250891)
+    //    --hct-fromInt-hue: $hct-fromInt.hue /* expected 157.20027653439868 */
+    //    --hct-fromInt-chroma: $hct-fromInt.chroma /* expected 73.68862852334654 */
+    //    --hct-fromInt-tone: $hct-fromInt.tone /* expected 83.14286324835774 */
+    //
+    //    /* HCT.toInt */
+    //    --hct-toInt-rgba: rgbaFromArgb(invoke3(HCTSolver.solveToInt, 157.20027653439868, 73.68862852334654, 83.14286324835774)) /* expected rgba(0, 237, 139, 1) */
+    //
+    //    /* HCT tones */
+    //    --hct-tone-100: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 100).argb)
+    //    --hct-tone-90: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 90).argb)
+    //    --hct-tone-80: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 80).argb)
+    //    --hct-tone-70: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 70).argb)
+    //    --hct-tone-60: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 60).argb)
+    //    --hct-tone-50: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 50).argb)
+    //    --hct-tone-40: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 40).argb)
+    //    --hct-tone-30: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 30).argb)
+    //    --hct-tone-20: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 20).argb)
+    //    --hct-tone-10: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 10).argb)
+    //    --hct-tone-0: rgbaFromArgb(invoke3(HCT.from, 157.20027653439868, 73.68862852334654, 0).argb)
+    //
+    //    $hct = invoke1(HCT.fromInt, 4278250891)
+    //
+    //    /* TonalPalette.fromHueAndChroma */
+    //    $tonalPalette-fromHueAndChroma = invoke2(TonalPalette.fromHueAndChroma, $hct.hue, $hct.chroma)
+    //    --tonalPalette-fromHueAndChroma-hue: $tonalPalette-fromHueAndChroma.hue /* expected 157.20027653439868 */
+    //    --tonalPalette-fromHueAndChroma-chroma: $tonalPalette-fromHueAndChroma.chroma /* expected 73.68862852334654 */
+    //    --tonalPalette-fromHueAndChroma-keyColor-hue: $tonalPalette-fromHueAndChroma.keyColor.hue /* expected 157.20027653439868 */
+    //    --tonalPalette-fromHueAndChroma-keyColor-chroma: $tonalPalette-fromHueAndChroma.keyColor.chroma /* expected 73.68862852334654 */
+    //    --tonalPalette-fromHueAndChroma-keyColor-tone: $tonalPalette-fromHueAndChroma.keyColor.tone
+    //    --tonalPalette-fromHueAndChroma-keyColor-rgba: rgbaFromArgb($tonalPalette-fromHueAndChroma.keyColor.argb)
+    //
+    //    $tonalPalette = invoke2(TonalPalette.fromHueAndChroma, $hct.hue, $hct.chroma)
+    //
+    //    /* TonalPalette.tone */
+    //    $tonalPalette-tone = invoke2(TonalPalette.tone, $tonalPalette, $hct.tone)
+    //    --tonalPalette-tone-int: $tonalPalette-tone
+    //    --tonalPalette-tone-rgba: rgbaFromArgb($tonalPalette-tone)
+    //
+    //    /* Palette tones */
+    //    --tone-100: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 100))
+    //    --tone-90: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 90))
+    //    --tone-80: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 80))
+    //    --tone-70: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 70))
+    //    --tone-60: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 60))
+    //    --tone-50: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 50))
+    //    --tone-40: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 40))
+    //    --tone-30: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 30))
+    //    --tone-20: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 20))
+    //    --tone-10: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 10))
+    //    --tone-0: rgbaFromArgb(invoke2(TonalPalette.tone, $tonalPalette, 0))
+    //}
